@@ -17,13 +17,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract IRHFIN source ZIP
+      - name: Extract IRHFIN ZIP
         shell: bash
         run: |
           set -e
           ZIP="$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "ERROR: IRHFIN ZIP not found"
+            echo "ERROR: Source ZIP not found"
             exit 1
           fi
 
@@ -35,13 +35,12 @@ jobs:
             -print -quit)"
 
           if [ -z "$SETTINGS" ]; then
-            echo "ERROR: Gradle settings file not found"
+            echo "ERROR: Gradle settings not found"
             exit 1
           fi
 
           ROOT="$(dirname "$SETTINGS")"
           cp -a "$ROOT"/. .
-
           test -f settings.gradle || test -f settings.gradle.kts
 
       - name: Set up Java 17
@@ -50,15 +49,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      - name: Configure Android SDK
         shell: bash
         run: |
           set -e
-          sdkmanager --licenses
-          sdkmanager \
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+          SDKMANAGER="$(find /usr/local/lib/android/sdk/cmdline-tools \
+            -type f -name sdkmanager -print -quit)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
@@ -68,7 +72,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build IRHFIN APK
+      - name: Build APK
         run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
